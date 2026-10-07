@@ -1,137 +1,122 @@
-# rn-boilerplate
+[![React Native](https://img.shields.io/badge/React%20Native-TypeScript-7F77DD?style=flat)](https://reactnative.dev/) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-1D9E75?logo=typescript&logoColor=white&style=flat)](https://typescriptlang.org) [![CI](https://img.shields.io/github/actions/workflow/status/Syzygy-Hub/syzygy-base-rn/ci.yml?label=ci&style=flat)](https://github.com/Syzygy-Hub/syzygy-base-rn/actions/workflows/ci.yml) [![Version](https://img.shields.io/badge/version-3.0.0-D85A30?style=flat)](https://github.com/Syzygy-Hub/syzygy-base-rn/releases) [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
-![React Native](https://img.shields.io/badge/React%20Native-0.86.2-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)
-![iOS & Android](https://img.shields.io/badge/platform-iOS%20%26%20Android-lightgrey)
-![Node](https://img.shields.io/badge/Node-22%2B-339933?logo=node.js)
-![License](https://img.shields.io/badge/license-MIT-green)
-[![RN CI](https://github.com/aks5686/rn-boilerplate/actions/workflows/rn.yml/badge.svg)](https://github.com/aks5686/rn-boilerplate/actions/workflows/rn.yml)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Syzygy-Hub/.github/main/brand/assets/banners/syzygy-banner-dark-1200.png">
+  <img src="https://raw.githubusercontent.com/Syzygy-Hub/.github/main/brand/assets/banners/syzygy-banner-light-1200.png" alt="Syzygy" width="600">
+</picture>
 
-Production-ready React Native boilerplate with Clean Architecture, MVVM, TypeScript, async/await and GitHub Actions CI/CD.
+# syzygy-base-rn
 
-## Getting Started
+A template React Native app (TypeScript) that wires all 5 Syzygy layers via the Core DI Container.
 
-1. Click [**Use this template**](https://github.com/aks5686/rn-boilerplate/generate) on GitHub.
-2. Clone your repo locally:
-   ```bash
-   git clone https://github.com/<your-username>/<your-repo>.git
-   cd <your-repo>
+## About
+
+syzygy-base-rn is a cross-platform iOS and Android React Native template written in TypeScript. It pre-wires all five Syzygy layers — Foundation, Core, Services, AI, and UI — through the Core DI Container so teams can clone the repo, run `setup.sh` to rename the project, and immediately start building features on top of a fully configured stack.
+
+## Platforms
+
+| Platform | Min Version | Package Manager | Status |
+|----------|-------------|-----------------|--------|
+| iOS | 16.0+ | npm / React Native | ✅ Supported |
+| Android | 8.0+ | npm / React Native | ✅ Supported |
+
+## Requirements
+
+- Node.js 20+
+- React Native 0.76+
+- iOS 16.0+ / Android 8.0+
+- Xcode 16+ (iOS builds)
+- Android Studio (Android builds)
+
+## Installation
+
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/Syzygy-Hub/syzygy-base-rn.git
    ```
-3. Run:
-   ```bash
-   ./setup.sh YourAppName
+2. Rename the project (PascalCase, no spaces):
+   ```sh
+   ./setup.sh YourAppName com.your.bundle
    ```
-4. Run the app:
-   ```bash
-   npm run ios
+3. Install dependencies:
+   ```sh
+   npm install
    ```
-   ```bash
-   npm run android
+4. Install iOS pods:
+   ```sh
+   cd ios && pod install
    ```
-
-## Available Scripts
-
-| Script | What it does |
-| --- | --- |
-| `npm run ios` | Installs dependencies, runs `pod install`, launches the iOS app |
-| `npm run android` | Installs dependencies, launches the Android app |
-| `npm run clean` | Removes `node_modules`, `Pods`, `Podfile.lock`, and Metro/Gradle caches |
-| `npm run start` | Starts the Metro bundler only |
+5. Run the app:
+   ```sh
+   npm run ios      # iOS Simulator
+   npm run android  # Android Emulator
+   ```
 
 ## Architecture
 
-This boilerplate follows **Clean Architecture** with an **MVVM** presentation layer, organized as vertical feature slices under `src/features`. Dependencies always point inward — the UI depends on the domain, never the reverse.
+The app depends on all five Syzygy layers via npm:
 
-```
-┌─────────────────────────────────────────────┐
-│  Presentation  (Screens + ViewModels)        │  React components, Zustand stores
-├─────────────────────────────────────────────┤
-│  Domain        (UseCases + Protocols)        │  Business rules, validation, pure TS
-├─────────────────────────────────────────────┤
-│  Data          (Repositories)                │  API DTOs ↔ domain models, persistence
-├─────────────────────────────────────────────┤
-│  Core          (Network, Storage, Utils)     │  Cross-cutting infrastructure
-└─────────────────────────────────────────────┘
-```
+| Layer | Package | Version |
+|-------|---------|---------|
+| Foundation | `@syzygy-hub/foundation-rn` | 3.0.0 |
+| Core | `@syzygy-hub/core-rn` | 3.0.0 |
+| Services | `@syzygy-hub/services-rn` | 3.0.0 |
+| AI | `@syzygy-hub/ai-rn` | 3.0.0 |
+| UI | `@syzygy-hub/ui-rn` | 3.0.0 |
 
-- **Presentation** — Screens (`.tsx`) are dumb views. Each screen reads state from and dispatches intents to a **ViewModel**, which is a [Zustand](https://github.com/pmndrs/zustand) store. No business logic lives in components.
-- **Domain** — `UseCase` classes implement a `Protocol` (interface) and hold all business rules (validation, orchestration). They depend only on repository interfaces, never on Axios or Keychain directly, which keeps them trivially unit-testable.
-- **Data** — `Repository` classes talk to the network layer and secure storage, and translate wire-format DTOs into domain models.
-- **Core** — Shared infrastructure: the Axios-based `NetworkClient` (interceptors, retries, typed errors), `SecureStorage` (Keychain-backed token storage), and dependency-free array/string extension utilities.
-- **DI** — `src/di/AppModule.ts` is a hand-written, lazily-instantiated singleton container. There is no reflection-based DI framework (no Hilt, no InversifyJS) — the dependency graph is small and static enough that explicit wiring is easier to read and debug, and it makes swapping in test doubles (`AppModule.override(...)`) trivial.
-- **State management** — [Zustand](https://github.com/pmndrs/zustand) only. No Redux, no Context-based global state.
+DI wiring lives in `src/di/`. Entry point is `index.js` → `App.tsx`. Navigation is handled by React Navigation in `src/navigation/`.
 
-## Folder Structure
+## Contents
 
-```
-.
-├── android/                       # Native Android project
-├── ios/                           # Native iOS project
-├── setup.sh                       # Renames the project (Boilerplate -> YourAppName)
-├── src/
-│   ├── core/
-│   │   ├── network/
-│   │   │   ├── NetworkClient.ts   # Axios client: auth header injection, 401 refresh flow, retries
-│   │   │   └── ApiError.ts        # Typed error hierarchy for all network failures
-│   │   ├── storage/
-│   │   │   └── SecureStorage.ts   # react-native-keychain wrapper for tokens
-│   │   └── extensions/
-│   │       ├── arrayExtensions.ts # unique, chunk, groupBy, sortBy, partition, ...
-│   │       └── stringExtensions.ts# isValidEmail, slugify, toCamelCase, ...
-│   ├── di/
-│   │   └── AppModule.ts           # Manual DI container (lazy singletons)
-│   ├── features/
-│   │   ├── auth/
-│   │   │   ├── domain/             # AuthUseCaseProtocol, AuthUseCase
-│   │   │   ├── data/                # AuthRepository, MockAuthRepository
-│   │   │   └── presentation/        # LoginViewModel (Zustand), LoginScreen (View)
-│   │   └── home/
-│   │       └── presentation/        # HomeScreen (View)
-│   ├── designSystem/
-│   │   ├── colors.ts               # Color tokens
-│   │   ├── typography.ts           # Type scale tokens
-│   │   └── spacing.ts              # Spacing / radius / layout tokens
-│   └── navigation/
-│       └── AppNavigator.tsx        # React Navigation root stack
-├── App.tsx
-└── package.json
+The `src/` directory contains nine folders:
+
+| Folder | Purpose |
+|--------|---------|
+| `core` | App-level core utilities and constants |
+| `designSystem` | Local design tokens extending Syzygy UI |
+| `di` | DI container setup and module registrations |
+| `features` | Feature modules (screens, view-models, repositories) |
+| `navigation` | React Navigation stack and tab configuration |
+| `network` | Network client configuration and interceptors |
+| `storage` | Storage provider setup |
+| `theme` | Theme overrides and SyzygyThemeProvider wiring |
+| `utils` | Shared utility helpers |
+
+## Usage
+
+### Resolving a DI dependency
+
+```typescript
+import { AppContainer, DI_KEYS } from './src/di/AppModule';
+
+const logger = AppContainer.resolve(DI_KEYS.logger);
 ```
 
-Add new features under `src/features/<feature>/{domain,data,presentation}`, following the same pattern as `auth`.
+### Wrapping with SyzygyThemeProvider
 
-## Usage Guide
+```tsx
+import { SyzygyThemeProvider } from '@syzygy-hub/ui-rn';
 
-### Adding a new feature
-
-1. **Domain** — define a `Protocol` interface and models in `domain/`, then an implementing `UseCase` class holding validation/business rules.
-2. **Data** — implement a `Repository` that satisfies the use case's dependencies, mapping API DTOs to domain models.
-3. **DI** — register lazy getters for the repository and use case in `src/di/AppModule.ts`.
-4. **Presentation** — create a Zustand store (`XyzViewModel.ts`) that calls `AppModule.xyzUseCase`, and a screen component that only reads/dispatches to that store.
-5. **Navigation** — register the screen in `src/navigation/AppNavigator.tsx`.
-
-### Networking
-
-All API calls should go through `AppModule.networkClient` (or a repository that wraps it). It already handles:
-
-- Attaching the access token from `SecureStorage`
-- Retrying idempotent (`GET`/`HEAD`) requests on transient/5xx failures with exponential backoff
-- A single in-flight token refresh on `401`, queuing nothing else — failed refresh triggers `onUnauthorized`
-- Normalizing every failure into an `ApiError` with a `type`, `statusCode`, and `isRetryable` flag
-
-### Testing
-
-```bash
-npm test        # Jest unit tests
-npm run lint     # ESLint
-npm run typecheck  # tsc --noEmit
+export default function App() {
+  return (
+    <SyzygyThemeProvider>
+      {/* your navigation and screens */}
+    </SyzygyThemeProvider>
+  );
+}
 ```
 
-`AppModule.override({...})` lets you inject fakes for `networkClient`, `authRepository`, or `authUseCase` in tests; call `AppModule.reset()` in `afterEach`.
+## Contributing
 
-## CI/CD
+1. Fork the repository and create a feature branch.
+2. Make changes following the existing code style (ESLint + Prettier are configured).
+3. Ensure `npm run lint`, `npm run typecheck`, and `npm test` all pass.
+4. Open a pull request against `main`.
 
-`.github/workflows/rn.yml` runs on every push/PR to `main` with three parallel jobs: **lint** (ESLint), **typecheck** (`tsc --noEmit`), and **test** (Jest with coverage).
+## Releases
+
+Releases follow semantic versioning. See [CHANGELOG.md](CHANGELOG.md) for the full history. The current release is [v3.0.0](https://github.com/Syzygy-Hub/syzygy-base-rn/releases/tag/v3.0.0).
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](LICENSE)

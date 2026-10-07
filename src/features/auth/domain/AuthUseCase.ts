@@ -1,6 +1,16 @@
-import { ApiError, ApiErrorType } from '../../../core/network/ApiError';
-import { SecureStorage } from '../../../core/storage/SecureStorage';
-import { isValidEmail, isBlank } from '../../../core/extensions/stringExtensions';
+import {
+  SyzygyErrorCode,
+  SyzygyErrorSeverity,
+  createStorageKey,
+} from 'syzygy-foundation-rn';
+import type { StorageProvider } from 'syzygy-foundation-rn';
+import { NetworkError } from 'syzygy-services-rn';
+
+import {
+  isValidEmail,
+  isBlank,
+} from '../../../core/extensions/stringExtensions';
+
 import {
   AuthRepositoryProtocol,
   AuthSession,
@@ -12,13 +22,18 @@ import {
 
 const MIN_PASSWORD_LENGTH = 8;
 
+const REFRESH_TOKEN_KEY = createStorageKey<string>('syzygy.auth.refreshToken');
+
 /**
  * Business-logic implementation of `AuthUseCaseProtocol`. Owns validation
  * rules and orchestrates the repository; the repository owns wire format
  * and persistence details.
  */
 export class AuthUseCase implements AuthUseCaseProtocol {
-  constructor(private readonly authRepository: AuthRepositoryProtocol) {}
+  constructor(
+    private readonly authRepository: AuthRepositoryProtocol,
+    private readonly storage: StorageProvider,
+  ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthSession> {
     this.validateLoginCredentials(credentials);
@@ -38,7 +53,10 @@ export class AuthUseCase implements AuthUseCaseProtocol {
     try {
       return await this.authRepository.getCurrentUser();
     } catch (error) {
-      if (error instanceof ApiError && error.type === ApiErrorType.UNAUTHORIZED) {
+      if (
+        error instanceof NetworkError &&
+        error.code === SyzygyErrorCode.unauthenticated
+      ) {
         return null;
       }
       throw error;
@@ -46,11 +64,12 @@ export class AuthUseCase implements AuthUseCaseProtocol {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    return SecureStorage.hasValidSession();
+    const token = await this.storage.get(REFRESH_TOKEN_KEY);
+    return token !== undefined && token !== null && token.length > 0;
   }
 
   async refreshSession(): Promise<AuthSession | null> {
-    const refreshToken = await SecureStorage.getRefreshToken();
+    const refreshToken = await this.storage.get(REFRESH_TOKEN_KEY);
     if (!refreshToken) {
       return null;
     }
@@ -59,24 +78,42 @@ export class AuthUseCase implements AuthUseCaseProtocol {
 
   private validateLoginCredentials(credentials: LoginCredentials): void {
     if (isBlank(credentials.email) || !isValidEmail(credentials.email)) {
-      throw ApiError.validation({ message: 'Please enter a valid email address.' });
+      throw new NetworkError(
+        'Please enter a valid email address.',
+        SyzygyErrorCode.unknown,
+        SyzygyErrorSeverity.Error,
+      );
     }
     if (isBlank(credentials.password)) {
-      throw ApiError.validation({ message: 'Please enter your password.' });
+      throw new NetworkError(
+        'Please enter your password.',
+        SyzygyErrorCode.unknown,
+        SyzygyErrorSeverity.Error,
+      );
     }
   }
 
   private validateRegisterCredentials(credentials: RegisterCredentials): void {
     if (isBlank(credentials.email) || !isValidEmail(credentials.email)) {
-      throw ApiError.validation({ message: 'Please enter a valid email address.' });
+      throw new NetworkError(
+        'Please enter a valid email address.',
+        SyzygyErrorCode.unknown,
+        SyzygyErrorSeverity.Error,
+      );
     }
     if (isBlank(credentials.displayName)) {
-      throw ApiError.validation({ message: 'Please enter your name.' });
+      throw new NetworkError(
+        'Please enter your name.',
+        SyzygyErrorCode.unknown,
+        SyzygyErrorSeverity.Error,
+      );
     }
     if (credentials.password.length < MIN_PASSWORD_LENGTH) {
-      throw ApiError.validation({
-        message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
-      });
+      throw new NetworkError(
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`,
+        SyzygyErrorCode.unknown,
+        SyzygyErrorSeverity.Error,
+      );
     }
   }
 }

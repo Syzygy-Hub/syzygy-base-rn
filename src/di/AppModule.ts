@@ -1,83 +1,216 @@
-import { NetworkClient } from '../core/network/NetworkClient';
-import { SecureStorage } from '../core/storage/SecureStorage';
-import { MockAuthRepository } from '../features/auth/data/MockAuthRepository';
-import { AuthUseCase } from '../features/auth/domain/AuthUseCase';
-import { AuthUseCaseProtocol } from '../features/auth/domain/AuthUseCaseProtocol';
-
-const API_BASE_URL = 'https://api.boilerplate.example.com/v1';
-
 /**
- * Manual, lazy dependency-injection container.
+ * Syzygy DI Container wiring for SyzygyBase.
  *
- * We deliberately avoid a DI framework (no Hilt/InversifyJS/tsyringe): the
- * dependency graph in a mobile app is small and static, so a hand-written
- * container is easier to read, easier to debug, and has zero runtime/reflection
- * overhead. Every dependency is exposed as a lazily-instantiated singleton
- * getter — nothing is constructed until it's first used.
+ * Registers all 5 layer dependencies (Foundation, Core, Services, AI, UI)
+ * into a single root Container from syzygy-core-rn.
  *
  * Usage:
- *   const authUseCase = AppModule.authUseCase;
+ *   Call `initDI()` once at app startup (before rendering), then resolve
+ *   dependencies via `AppContainer.resolve('key')`.
  *
  * Testing:
- *   Call `AppModule.reset()` between test suites, and/or use
- *   `AppModule.override({ authUseCase: fakeAuthUseCase })` to inject test doubles.
+ *   Call `AppContainer.resetRegistrations()` in afterEach, then re-register
+ *   test doubles before each test.
  */
-class AppModuleContainer {
-  private _networkClient?: NetworkClient;
-  private _authRepository?: MockAuthRepository;
-  private _authUseCase?: AuthUseCaseProtocol;
 
-  private overrides: Partial<{
-    networkClient: NetworkClient;
-    authRepository: MockAuthRepository;
-    authUseCase: AuthUseCaseProtocol;
-  }> = {};
+import { Container, Lifetime } from 'syzygy-core-rn';
+import {
+  Logger,
+  ConsoleLogDestination,
+  LogLevel,
+  EventBus,
+  StateStore,
+  Router,
+  DefaultScheduler,
+  InMemoryFeatureFlagProvider,
+  ConfigRegistry,
+  AppLifecycleTracker,
+} from 'syzygy-core-rn';
+import {
+  FetchNetworkClient,
+  JWTAuthProvider,
+  InMemoryStorageProvider,
+} from 'syzygy-services-rn';
 
-  get networkClient(): NetworkClient {
-    if (this.overrides.networkClient) return this.overrides.networkClient;
-    if (!this._networkClient) {
-      this._networkClient = new NetworkClient({
-        baseURL: API_BASE_URL,
-        onUnauthorized: async () => {
-          await SecureStorage.clearAll();
-        },
-        refreshAccessToken: async (_refreshToken: string) => {
-          const session = await this.authUseCase.refreshSession();
-          return session?.accessToken ?? null;
-        },
-      });
-    }
-    return this._networkClient;
-  }
+import { AuthRepository } from '../features/auth/data/AuthRepository';
+import { AuthUseCase } from '../features/auth/domain/AuthUseCase';
+import type { AuthUseCaseProtocol } from '../features/auth/domain/AuthUseCaseProtocol';
 
-  get authRepository(): MockAuthRepository {
-    if (this.overrides.authRepository) return this.overrides.authRepository;
-    if (!this._authRepository) {
-      this._authRepository = new MockAuthRepository();
-    }
-    return this._authRepository;
-  }
+// ---------------------------------------------------------------------------
+// Root application container
+// ---------------------------------------------------------------------------
 
-  get authUseCase(): AuthUseCaseProtocol {
-    if (this.overrides.authUseCase) return this.overrides.authUseCase;
-    if (!this._authUseCase) {
-      this._authUseCase = new AuthUseCase(this.authRepository);
-    }
-    return this._authUseCase;
-  }
+export const AppContainer = new Container();
 
-  /** Injects test doubles. Intended for use in unit/integration tests only. */
-  override(overrides: Partial<AppModuleContainer['overrides']>): void {
-    this.overrides = { ...this.overrides, ...overrides };
-  }
+// ---------------------------------------------------------------------------
+// Registration keys
+// ---------------------------------------------------------------------------
 
-  /** Clears cached singletons and overrides. Call from `afterEach` in tests. */
-  reset(): void {
-    this._networkClient = undefined;
-    this._authRepository = undefined;
-    this._authUseCase = undefined;
-    this.overrides = {};
-  }
+export const DI_KEYS = {
+  logger: 'logger',
+  networkClient: 'networkClient',
+  storageProvider: 'storageProvider',
+  authProvider: 'authProvider',
+  stateStore: 'stateStore',
+  eventBus: 'eventBus',
+  router: 'router',
+  scheduler: 'scheduler',
+  featureFlagProvider: 'featureFlagProvider',
+  configRegistry: 'configRegistry',
+  appLifecycleTracker: 'appLifecycleTracker',
+  // Feature-level
+  authRepository: 'authRepository',
+  authUseCase: 'authUseCase',
+} as const;
+
+// ---------------------------------------------------------------------------
+// initDI — call once at app startup
+// ---------------------------------------------------------------------------
+
+export function initDI(): void {
+  // --- Core: Logger ---
+  AppContainer.register(DI_KEYS.logger, Lifetime.Singleton, () => {
+    const logger = new Logger();
+    logger.addDestination(new ConsoleLogDestination(), LogLevel.Debug);
+    return logger;
+  });
+
+  // --- Core: EventBus ---
+  AppContainer.register(
+    DI_KEYS.eventBus,
+    Lifetime.Singleton,
+    () => new EventBus(),
+  );
+
+  // --- Core: DefaultScheduler ---
+  AppContainer.register(
+    DI_KEYS.scheduler,
+    Lifetime.Singleton,
+    () => new DefaultScheduler(),
+  );
+
+  // --- Core: InMemoryFeatureFlagProvider ---
+  AppContainer.register(
+    DI_KEYS.featureFlagProvider,
+    Lifetime.Singleton,
+    () => new InMemoryFeatureFlagProvider(),
+  );
+
+  // --- Core: ConfigRegistry ---
+  AppContainer.register(
+    DI_KEYS.configRegistry,
+    Lifetime.Singleton,
+    () => new ConfigRegistry(),
+  );
+
+  // --- Core: AppLifecycleTracker ---
+  AppContainer.register(
+    DI_KEYS.appLifecycleTracker,
+    Lifetime.Singleton,
+    () => new AppLifecycleTracker(),
+  );
+
+  // --- Core: Router ---
+  AppContainer.register(DI_KEYS.router, Lifetime.Singleton, () => new Router());
+
+  // --- Services: StorageProvider (InMemoryStorageProvider) ---
+  // Replace with AsyncStorage-backed provider for production persistence.
+  AppContainer.register(
+    DI_KEYS.storageProvider,
+    Lifetime.Singleton,
+    () => new InMemoryStorageProvider(),
+  );
+
+  // --- Services: NetworkClient (FetchNetworkClient) ---
+  AppContainer.register(DI_KEYS.networkClient, Lifetime.Singleton, c => {
+    const logger = c.resolve<Logger>(DI_KEYS.logger);
+    return new FetchNetworkClient({ logger });
+  });
+
+  // --- Services: AuthProvider (JWTAuthProvider) ---
+  AppContainer.register(DI_KEYS.authProvider, Lifetime.Singleton, c => {
+    const storage = c.resolve<InMemoryStorageProvider>(DI_KEYS.storageProvider);
+    const network = c.resolve<FetchNetworkClient>(DI_KEYS.networkClient);
+    return new JWTAuthProvider({
+      storage,
+      network,
+      refreshUrl: 'https://api.syzygyhub.base/v1/auth/refresh',
+    });
+  });
+
+  // ── StateStore ──────────────────────────────────────────────────────────────
+  // StateStore<S, A> is generic. The base template registers a no-op store.
+  // Replace with your real app state once you define AppState and AppAction:
+  //
+  // interface AppState { isLoggedIn: boolean; user: User | null; }
+  // type AppAction = { type: 'LOGIN'; user: User } | { type: 'LOGOUT' };
+  // const appReducer = (state: AppState, action: AppAction): AppState => {
+  //   switch (action.type) {
+  //     case 'LOGIN':  return { ...state, isLoggedIn: true, user: action.user };
+  //     case 'LOGOUT': return { ...state, isLoggedIn: false, user: null };
+  //     default:       return state;
+  //   }
+  // };
+  // AppContainer.register('stateStore', Lifetime.Singleton, () =>
+  //   new StateStore({ isLoggedIn: false, user: null }, appReducer));
+  //
+  // See syzygy-core-rn src/state/StateStore.ts for the full API.
+  AppContainer.register(
+    DI_KEYS.stateStore,
+    Lifetime.Singleton,
+    () =>
+      new StateStore<Record<string, unknown>, { type: string }>(
+        {},
+        (state, _action) => state,
+      ),
+  );
+
+  // ── AI Layer registrations (add after syzygy-ai-rn is available on npm) ──────
+  // import { LLMProvider, DefaultAgent, EmbeddingProvider, RAGProvider, MemoryManager, NamespacedMemoryManager } from 'syzygy-ai-rn';
+  //
+  // AppContainer.register('llmProvider', Lifetime.Singleton, () => new DefaultLLMProvider());
+  // AppContainer.register('agent', Lifetime.Singleton, (c) => new DefaultAgent({ llm: c.resolve('llmProvider') }));
+  // AppContainer.register('embeddingProvider', Lifetime.Singleton, () => new DefaultEmbeddingProvider());
+  // AppContainer.register('ragProvider', Lifetime.Singleton, (c) => new DefaultRAGProvider({ embeddings: c.resolve('embeddingProvider') }));
+  // AppContainer.register('memoryManager', Lifetime.Singleton, () => new DefaultMemoryManager());
+  // AppContainer.register('namespacedMemoryManager', Lifetime.Singleton, (c) => new NamespacedMemoryManager({ base: c.resolve('memoryManager') }));
+
+  // --- Feature: AuthRepository (real implementation backed by FetchNetworkClient) ---
+  AppContainer.register(DI_KEYS.authRepository, Lifetime.Singleton, c => {
+    const network = c.resolve<FetchNetworkClient>(DI_KEYS.networkClient);
+    const storage = c.resolve<InMemoryStorageProvider>(DI_KEYS.storageProvider);
+    return new AuthRepository(network, storage);
+  });
+
+  // --- Feature: AuthUseCase ---
+  AppContainer.register(DI_KEYS.authUseCase, Lifetime.Singleton, c => {
+    const repo = c.resolve<AuthRepository>(DI_KEYS.authRepository);
+    const storage = c.resolve<InMemoryStorageProvider>(DI_KEYS.storageProvider);
+    return new AuthUseCase(repo, storage);
+  });
 }
 
-export const AppModule = new AppModuleContainer();
+// ---------------------------------------------------------------------------
+// Convenience accessor (mirrors the old AppModule API)
+// ---------------------------------------------------------------------------
+
+/**
+ * Convenience object that resolves the most-used dependencies by name.
+ * Prefer calling AppContainer.resolve() directly for new code.
+ */
+export const AppModule = {
+  get authUseCase(): AuthUseCaseProtocol {
+    return AppContainer.resolve<AuthUseCaseProtocol>(DI_KEYS.authUseCase);
+  },
+  get logger(): Logger {
+    return AppContainer.resolve<Logger>(DI_KEYS.logger);
+  },
+  get networkClient(): FetchNetworkClient {
+    return AppContainer.resolve<FetchNetworkClient>(DI_KEYS.networkClient);
+  },
+  get storageProvider(): InMemoryStorageProvider {
+    return AppContainer.resolve<InMemoryStorageProvider>(
+      DI_KEYS.storageProvider,
+    );
+  },
+};
