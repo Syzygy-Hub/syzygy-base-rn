@@ -1,6 +1,7 @@
+import { NetworkError } from 'syzygy-services-rn';
 import { create } from 'zustand';
+
 import { AppModule } from '../../../di/AppModule';
-import { ApiError } from '../../../core/network/ApiError';
 import { User } from '../domain/AuthUseCaseProtocol';
 
 export interface LoginFormState {
@@ -15,6 +16,7 @@ export interface LoginViewModelActions {
   setEmail: (email: string) => void;
   setPassword: (password: string) => void;
   submit: () => Promise<void>;
+  logout: () => Promise<void>;
   clearError: () => void;
   reset: () => void;
 }
@@ -48,6 +50,14 @@ export const useLoginViewModel = create<LoginViewModel>((set, get) => ({
 
   reset: () => set(initialState),
 
+  logout: async () => {
+    try {
+      await AppModule.authUseCase.logout();
+    } finally {
+      set(initialState);
+    }
+  },
+
   submit: async () => {
     const { email, password, isSubmitting } = get();
     if (isSubmitting) return;
@@ -55,11 +65,16 @@ export const useLoginViewModel = create<LoginViewModel>((set, get) => ({
     set({ isSubmitting: true, errorMessage: null });
 
     try {
-      const session = await AppModule.authUseCase.login({ email: email.trim(), password });
+      const session = await AppModule.authUseCase.login({
+        email: email.trim(),
+        password,
+      });
       set({ isSubmitting: false, user: session.user, errorMessage: null });
     } catch (error) {
       const message =
-        error instanceof ApiError ? error.message : 'Something went wrong. Please try again.';
+        error instanceof NetworkError
+          ? error.message
+          : 'Something went wrong. Please try again.';
       set({ isSubmitting: false, errorMessage: message });
     }
   },

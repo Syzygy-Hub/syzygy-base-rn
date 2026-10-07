@@ -1,20 +1,45 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors } from '../../../designSystem/colors';
-import { typography } from '../../../designSystem/typography';
-import { spacing, layout } from '../../../designSystem/spacing';
+import { defaultTypography, getColors, spacing } from 'syzygy-ui-rn';
+
+import { useLoginViewModel } from '../../auth/presentation/LoginViewModel';
+
+const c = getColors('light');
+
+const typography = {
+  headingLarge: defaultTypography.display,
+  bodyMedium: defaultTypography.body,
+};
+
+const layout = {
+  screenHorizontalPadding: 16,
+};
+
+export interface HomeScreenProps {
+  onLogout?: () => void;
+}
 
 /**
  * Minimal authenticated landing screen shown after a successful login.
  * Replace with the real Home feature as the app grows.
  */
-export function HomeScreen(): React.JSX.Element {
+export function HomeScreen({ onLogout }: HomeScreenProps): React.JSX.Element {
+  const logout = useLoginViewModel(state => state.logout);
+
+  const handleLogout = async () => {
+    await logout();
+    onLogout?.();
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.content}>
-        <Text style={styles.title}>You're signed in</Text>
+        <Text style={styles.title}>You&apos;re signed in</Text>
         <Text style={styles.subtitle}>This is the Home screen.</Text>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Log out</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -23,7 +48,7 @@ export function HomeScreen(): React.JSX.Element {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background,
   },
   content: {
     flex: 1,
@@ -34,10 +59,21 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.headingLarge,
-    color: colors.text.primary,
+    color: c.textPrimary,
   },
   subtitle: {
     ...typography.bodyMedium,
-    color: colors.text.secondary,
+    color: c.textSecondary,
+  },
+  logoutButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 8,
+    backgroundColor: c.primary,
+  },
+  logoutText: {
+    ...typography.bodyMedium,
+    color: c.textInverse,
   },
 });

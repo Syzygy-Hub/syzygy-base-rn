@@ -1,13 +1,16 @@
 import 'react-native-gesture-handler';
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { getColors } from 'syzygy-ui-rn';
+
+import { AppModule } from '../di/AppModule';
 import { LoginScreen } from '../features/auth/presentation/LoginScreen';
 import { HomeScreen } from '../features/home/presentation/HomeScreen';
-import { AppModule } from '../di/AppModule';
-import { colors } from '../designSystem/colors';
+
+const c = getColors('light');
 
 export type RootStackParamList = {
   Login: undefined;
@@ -50,10 +53,14 @@ function AppNavigator(): React.JSX.Element {
     setAuthState('authenticated');
   }, []);
 
+  const handleLogout = useCallback(() => {
+    setAuthState('unauthenticated');
+  }, []);
+
   if (authState === 'checking') {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={colors.brand.primary} size="large" />
+        <ActivityIndicator color={c.primary} size="large" />
       </View>
     );
   }
@@ -62,7 +69,9 @@ function AppNavigator(): React.JSX.Element {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {authState === 'authenticated' ? (
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="Home">
+            {() => <HomeScreen onLogout={handleLogout} />}
+          </Stack.Screen>
         ) : (
           <Stack.Screen name="Login">
             {() => <LoginScreen onLoginSuccess={handleLoginSuccess} />}
@@ -78,7 +87,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background,
   },
 });
 

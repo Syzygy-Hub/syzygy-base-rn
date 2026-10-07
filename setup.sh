@@ -27,7 +27,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 OLD_JAVA_PACKAGE="com.aks.${OLD_NAME_LOWER}"
-NEW_JAVA_PACKAGE="com.aks.${NEW_NAME_LOWER}"
+NEW_JAVA_PACKAGE="com.syzygyhub.${NEW_NAME_LOWER}"
 OLD_JAVA_PATH="android/app/src/main/java/com/aks/${OLD_NAME_LOWER}"
 NEW_JAVA_PATH="android/app/src/main/java/com/aks/${NEW_NAME_LOWER}"
 

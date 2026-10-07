@@ -1,11 +1,16 @@
-import { NetworkClient } from '../../../core/network/NetworkClient';
-import { SecureStorage } from '../../../core/storage/SecureStorage';
+import type { StorageProvider } from 'syzygy-foundation-rn';
+import { createStorageKey } from 'syzygy-foundation-rn';
+import { FetchNetworkClient } from 'syzygy-services-rn';
+
 import {
   AuthSession,
   LoginCredentials,
   RegisterCredentials,
   User,
 } from '../domain/AuthUseCaseProtocol';
+
+const ACCESS_TOKEN_KEY = createStorageKey<string>('syzygy.auth.accessToken');
+const REFRESH_TOKEN_KEY = createStorageKey<string>('syzygy.auth.refreshToken');
 
 interface AuthSessionResponseDto {
   user: {
@@ -43,75 +48,138 @@ function toSession(dto: AuthSessionResponseDto): AuthSession {
 }
 
 /**
- * Data layer for authentication. Talks to the remote API and to secure
- * on-device storage; contains no business rules (those live in AuthUseCase).
+ * Data layer for authentication. Talks to the remote API and to the injected
+ * StorageProvider; contains no business rules (those live in AuthUseCase).
  */
 export class AuthRepository {
-  constructor(private readonly networkClient: NetworkClient) {}
+  /** Guard: prevents re-entrant refresh calls (401 on the refresh endpoint must not trigger another refresh). */
+  private _isRefreshing = false;
+
+  constructor(
+    private readonly networkClient: FetchNetworkClient,
+    private readonly storage: StorageProvider,
+  ) {}
 
   async login(credentials: LoginCredentials): Promise<AuthSession> {
-    const response = await this.networkClient.post<AuthSessionResponseDto>('/auth/login', {
-      email: credentials.email,
-      password: credentials.password,
+    const body = new TextEncoder().encode(
+      JSON.stringify({
+        email: credentials.email,
+        password: credentials.password,
+      }),
+    );
+    const { createNetworkRequest } = await import('syzygy-foundation-rn');
+    const request = createNetworkRequest({
+      url: '/auth/login',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
     });
-    const session = toSession(response);
+    const response = await this.networkClient.execute(request);
+    const dto = JSON.parse(
+      new TextDecoder().decode(response.data),
+    ) as AuthSessionResponseDto;
+    const session = toSession(dto);
     await this.persistSession(session);
     return session;
   }
 
   async register(credentials: RegisterCredentials): Promise<AuthSession> {
-    const response = await this.networkClient.post<AuthSessionResponseDto>('/auth/register', {
-      email: credentials.email,
-      password: credentials.password,
-      display_name: credentials.displayName,
+    const body = new TextEncoder().encode(
+      JSON.stringify({
+        email: credentials.email,
+        password: credentials.password,
+        display_name: credentials.displayName,
+      }),
+    );
+    const { createNetworkRequest } = await import('syzygy-foundation-rn');
+    const request = createNetworkRequest({
+      url: '/auth/register',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
     });
-    const session = toSession(response);
+    const response = await this.networkClient.execute(request);
+    const dto = JSON.parse(
+      new TextDecoder().decode(response.data),
+    ) as AuthSessionResponseDto;
+    const session = toSession(dto);
     await this.persistSession(session);
     return session;
   }
 
   async logout(): Promise<void> {
     try {
-      await this.networkClient.post<void>('/auth/logout');
+      const { createNetworkRequest } = await import('syzygy-foundation-rn');
+      const request = createNetworkRequest({
+        url: '/auth/logout',
+        method: 'POST',
+        headers: {},
+      });
+      await this.networkClient.execute(request);
     } finally {
-      await SecureStorage.clearAll();
+      await this.storage.remove(ACCESS_TOKEN_KEY);
+      await this.storage.remove(REFRESH_TOKEN_KEY);
     }
   }
 
   async getCurrentUser(): Promise<User | null> {
-    const isAuthenticated = await SecureStorage.hasValidSession();
-    if (!isAuthenticated) {
+    const token = await this.storage.get(ACCESS_TOKEN_KEY);
+    if (!token) {
       return null;
     }
-    const dto = await this.networkClient.get<AuthSessionResponseDto['user']>('/auth/me');
+    const { createNetworkRequest } = await import('syzygy-foundation-rn');
+    const request = createNetworkRequest({
+      url: '/auth/me',
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const response = await this.networkClient.execute(request);
+    const dto = JSON.parse(
+      new TextDecoder().decode(response.data),
+    ) as AuthSessionResponseDto['user'];
     return toUser(dto);
   }
 
   async refreshSession(refreshToken: string): Promise<AuthSession | null> {
+    // Prevent re-entrant refresh: a 401 on the refresh endpoint must fail
+    // immediately rather than trigger another refresh cycle.
+    if (this._isRefreshing) {
+      return null;
+    }
+    this._isRefreshing = true;
     try {
-      const response = await this.networkClient.post<RefreshResponseDto>('/auth/refresh', {
-        refresh_token: refreshToken,
+      const body = new TextEncoder().encode(
+        JSON.stringify({ refresh_token: refreshToken }),
+      );
+      const { createNetworkRequest } = await import('syzygy-foundation-rn');
+      const request = createNetworkRequest({
+        url: '/auth/refresh',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
       });
-      await SecureStorage.setTokens({
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
-      });
+      const response = await this.networkClient.execute(request);
+      const dto = JSON.parse(
+        new TextDecoder().decode(response.data),
+      ) as RefreshResponseDto;
+      await this.storage.set(dto.access_token, ACCESS_TOKEN_KEY);
+      await this.storage.set(dto.refresh_token, REFRESH_TOKEN_KEY);
       const user = await this.getCurrentUser();
       if (!user) return null;
       return {
         user,
-        accessToken: response.access_token,
-        refreshToken: response.refresh_token,
+        accessToken: dto.access_token,
+        refreshToken: dto.refresh_token,
       };
     } catch {
       return null;
+    } finally {
+      this._isRefreshing = false;
     }
   }
 
   private async persistSession(session: AuthSession): Promise<void> {
-    await SecureStorage.setTokens({
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    });
+    await this.storage.set(session.accessToken, ACCESS_TOKEN_KEY);
+    await this.storage.set(session.refreshToken, REFRESH_TOKEN_KEY);
   }
 }

@@ -11,11 +11,27 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { defaultTypography, getColors, radius, spacing } from 'syzygy-ui-rn';
 import { useShallow } from 'zustand/react/shallow';
+
 import { useLoginViewModel } from './LoginViewModel';
-import { colors } from '../../../designSystem/colors';
-import { typography } from '../../../designSystem/typography';
-import { spacing, radius, layout } from '../../../designSystem/spacing';
+
+const c = getColors('light');
+
+const typography = {
+  displaySmall: defaultTypography.title,
+  bodyMedium: defaultTypography.body,
+  labelMedium: defaultTypography.subheadline,
+  bodyLarge: defaultTypography.callout,
+  bodySmall: defaultTypography.footnote,
+  button: defaultTypography.headline,
+};
+
+const layout = {
+  screenHorizontalPadding: 16,
+  screenVerticalPadding: 24,
+  minTouchTarget: 44,
+};
 
 export interface LoginScreenProps {
   onLoginSuccess?: (userId: string) => void;
@@ -26,20 +42,30 @@ export interface LoginScreenProps {
  * reads state from `useLoginViewModel` and forwards user intent (text
  * changes, submit taps) to the ViewModel's actions.
  */
-export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Element {
-  const { email, password, isSubmitting, errorMessage, user, setEmail, setPassword, submit } =
-    useLoginViewModel(
-      useShallow(state => ({
-        email: state.email,
-        password: state.password,
-        isSubmitting: state.isSubmitting,
-        errorMessage: state.errorMessage,
-        user: state.user,
-        setEmail: state.setEmail,
-        setPassword: state.setPassword,
-        submit: state.submit,
-      })),
-    );
+export function LoginScreen({
+  onLoginSuccess,
+}: LoginScreenProps): React.JSX.Element {
+  const {
+    email,
+    password,
+    isSubmitting,
+    errorMessage,
+    user,
+    setEmail,
+    setPassword,
+    submit,
+  } = useLoginViewModel(
+    useShallow(state => ({
+      email: state.email,
+      password: state.password,
+      isSubmitting: state.isSubmitting,
+      errorMessage: state.errorMessage,
+      user: state.user,
+      setEmail: state.setEmail,
+      setPassword: state.setPassword,
+      submit: state.submit,
+    })),
+  );
 
   useEffect(() => {
     if (user) {
@@ -51,7 +77,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
     submit();
   }, [submit]);
 
-  const isSubmitDisabled = isSubmitting || email.trim().length === 0 || password.length === 0;
+  const isSubmitDisabled =
+    isSubmitting || email.trim().length === 0 || password.length === 0;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -76,7 +103,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
-                placeholderTextColor={colors.text.tertiary}
+                placeholderTextColor={c.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -93,7 +120,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor={colors.text.tertiary}
+                placeholderTextColor={c.textTertiary}
                 secureTextEntry
                 textContentType="password"
                 returnKeyType="done"
@@ -109,13 +136,16 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
             ) : null}
 
             <TouchableOpacity
-              style={[styles.submitButton, isSubmitDisabled && styles.submitButtonDisabled]}
+              style={[
+                styles.submitButton,
+                isSubmitDisabled && styles.submitButtonDisabled,
+              ]}
               onPress={handleSubmit}
               disabled={isSubmitDisabled}
               activeOpacity={0.8}
             >
               {isSubmitting ? (
-                <ActivityIndicator color={colors.text.inverse} />
+                <ActivityIndicator color={c.textInverse} />
               ) : (
                 <Text style={styles.submitButtonText}>Sign in</Text>
               )}
@@ -130,7 +160,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps): React.JSX.Ele
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background.primary,
+    backgroundColor: c.background,
   },
   flex: {
     flex: 1,
@@ -146,11 +176,11 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.displaySmall,
-    color: colors.text.primary,
+    color: c.textPrimary,
   },
   subtitle: {
     ...typography.bodyMedium,
-    color: colors.text.secondary,
+    color: c.textSecondary,
     marginTop: spacing.xxs,
   },
   form: {
@@ -161,30 +191,30 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.labelMedium,
-    color: colors.text.primary,
+    color: c.textPrimary,
   },
   input: {
     ...typography.bodyLarge,
-    color: colors.text.primary,
+    color: c.textPrimary,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: c.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     minHeight: layout.minTouchTarget,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: c.surfaceSecondary,
   },
   errorContainer: {
-    backgroundColor: colors.status.errorMuted,
+    backgroundColor: c.errorMuted,
     borderRadius: radius.md,
     padding: spacing.sm,
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.status.errorStrong,
+    color: c.error,
   },
   submitButton: {
-    backgroundColor: colors.brand.primary,
+    backgroundColor: c.primary,
     borderRadius: radius.md,
     minHeight: layout.minTouchTarget,
     alignItems: 'center',
@@ -192,10 +222,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   submitButtonDisabled: {
-    backgroundColor: colors.border.strong,
+    backgroundColor: c.separator,
   },
   submitButtonText: {
     ...typography.button,
-    color: colors.text.inverse,
+    color: c.textInverse,
   },
 });

@@ -1,10 +1,15 @@
-import { SecureStorage } from '../../../core/storage/SecureStorage';
+import type { StorageProvider } from 'syzygy-foundation-rn';
+import { createStorageKey } from 'syzygy-foundation-rn';
+
 import {
   AuthSession,
   LoginCredentials,
   RegisterCredentials,
   User,
 } from '../domain/AuthUseCaseProtocol';
+
+const ACCESS_TOKEN_KEY = createStorageKey<string>('syzygy.auth.accessToken');
+const REFRESH_TOKEN_KEY = createStorageKey<string>('syzygy.auth.refreshToken');
 
 const MOCK_NETWORK_DELAY_MS = 400;
 
@@ -40,6 +45,8 @@ function buildMockSession(user: User): AuthSession {
 export class MockAuthRepository {
   private currentUser: User | null = null;
 
+  constructor(private readonly storage: StorageProvider) {}
+
   async login(credentials: LoginCredentials): Promise<AuthSession> {
     await delay(MOCK_NETWORK_DELAY_MS);
     const user = buildMockUser(credentials.email);
@@ -60,11 +67,14 @@ export class MockAuthRepository {
 
   async logout(): Promise<void> {
     this.currentUser = null;
-    await SecureStorage.clearAll();
+    await this.storage.remove(ACCESS_TOKEN_KEY);
+    await this.storage.remove(REFRESH_TOKEN_KEY);
   }
 
   async getCurrentUser(): Promise<User | null> {
-    const isAuthenticated = await SecureStorage.hasValidSession();
+    const token = await this.storage.get(ACCESS_TOKEN_KEY);
+    const isAuthenticated =
+      token !== undefined && token !== null && token.length > 0;
     if (!isAuthenticated) {
       return null;
     }
@@ -81,9 +91,7 @@ export class MockAuthRepository {
   }
 
   private async persistSession(session: AuthSession): Promise<void> {
-    await SecureStorage.setTokens({
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-    });
+    await this.storage.set(session.accessToken, ACCESS_TOKEN_KEY);
+    await this.storage.set(session.refreshToken, REFRESH_TOKEN_KEY);
   }
 }
